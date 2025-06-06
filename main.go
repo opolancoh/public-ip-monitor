@@ -1,3 +1,9 @@
+// Package main implements a dynamic IP monitoring service that tracks changes
+// to the public IP address and sends notifications via WhatsApp and email.
+//
+// The service polls multiple IP detection services for redundancy and maintains
+// a historical record of IP changes with timestamps. Configuration is managed
+// through a JSON file with sensible defaults.
 package main
 
 import (
@@ -13,66 +19,63 @@ import (
 	"time"
 )
 
-// =====================================
-// CONFIGURATION AND CONSTANTS
-// =====================================
-
 const (
-	// File paths
+	// File paths for persistent storage
 	ConfigFile  = "config.json"
 	RecordsFile = "ip_records.json"
 	LastIpFile  = "last_ip.txt"
 
-	// Default configuration values
-	DefaultCheckIntervalSeconds = 300 // 5 minutes in seconds
-	DefaultWhatsappToken        = "YOUR_WHATSAPP_TOKEN"
-	DefaultWhatsappPhoneId      = "YOUR_PHONE_ID"
-	DefaultRecipientNumber      = "YOUR_RECIPIENT_NUMBER"
+	// Default monitoring interval
+	DefaultCheckIntervalSeconds = 300
 
-	// Email defaults
+	// WhatsApp Business API defaults
+	DefaultWhatsappToken   = "YOUR_WHATSAPP_TOKEN"
+	DefaultWhatsappPhoneId = "YOUR_PHONE_ID"
+	DefaultRecipientNumber = "YOUR_RECIPIENT_NUMBER"
+
+	// SMTP configuration defaults
 	DefaultEmailFrom     = "your-email@gmail.com"
 	DefaultEmailPassword = "your-app-password"
 	DefaultEmailTo       = "recipient@gmail.com"
 	DefaultSMTPHost      = "smtp.gmail.com"
 	DefaultSMTPPort      = "587"
 
-	// API settings
+	// Network and API configuration
 	HttpTimeoutSeconds = 30
 	WhatsappApiVersion = "v17.0"
 
-	// File permissions
+	// File system permissions
 	ConfigFilePerm = 0644
 	DataFilePerm   = 0644
 )
 
-// IP services for redundancy
+// IP_SERVICES provides multiple endpoints for IP detection to ensure reliability
+// in case one service becomes unavailable.
 var IP_SERVICES = []string{
 	"https://api.ipify.org",
 	"https://icanhazip.com",
 	"https://ipecho.net/plain",
 }
 
-// =====================================
-// DATA STRUCTURES
-// =====================================
-
-// IPRecord represents an IP change record
+// IPRecord represents a single IP change event with timestamp for historical tracking.
 type IPRecord struct {
 	IP        string    `json:"ip"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// Config holds configuration for the application
+// Config holds all application configuration including notification settings
+// and monitoring parameters. Both WhatsApp and email notifications can be
+// independently enabled or disabled.
 type Config struct {
 	CheckIntervalSeconds int `json:"check_interval_seconds"`
 
-	// WhatsApp configuration
+	// WhatsApp Business API configuration
 	WhatsAppEnabled bool   `json:"whatsapp_enabled"`
 	WhatsAppToken   string `json:"whatsapp_token"`
 	WhatsAppPhoneID string `json:"whatsapp_phone_id"`
 	RecipientNumber string `json:"recipient_number"`
 
-	// Email configuration
+	// SMTP email configuration
 	EmailEnabled  bool   `json:"email_enabled"`
 	EmailFrom     string `json:"email_from"`
 	EmailPassword string `json:"email_password"`
@@ -84,13 +87,11 @@ type Config struct {
 func main() {
 	log.Println("Starting IP Monitor...")
 
-	// Load configuration
 	config, err := loadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Read last known IP
 	lastIP := readLastIP()
 	if lastIP == "" {
 		log.Println("No last IP found - this appears to be the first run")
@@ -98,10 +99,10 @@ func main() {
 		log.Printf("Last known IP: %s", lastIP)
 	}
 
-	// Check IP immediately on startup
+	// Perform initial check to establish baseline
 	checkIPAndNotify(config)
 
-	// Set up periodic checking
+	// Set up continuous monitoring
 	ticker := time.NewTicker(time.Duration(config.CheckIntervalSeconds) * time.Second)
 	defer ticker.Stop()
 
@@ -112,9 +113,10 @@ func main() {
 	}
 }
 
-// loadConfig loads configuration from JSON file
+// loadConfig reads configuration from JSON file, creating a default configuration
+// file with placeholder values if none exists. Returns an error prompting user
+// to fill in credentials when default config is created.
 func loadConfig() (*Config, error) {
-	// Create default config file if it doesn't exist
 	if _, err := os.Stat(ConfigFile); os.IsNotExist(err) {
 		defaultConfig := &Config{
 			WhatsAppToken:        DefaultWhatsappToken,
@@ -146,9 +148,9 @@ func loadConfig() (*Config, error) {
 	return &config, err
 }
 
-// getCurrentIP fetches the current public IP
+// getCurrentIP attempts to retrieve the public IP address from multiple services
+// for redundancy. Returns the first successful response or an error if all services fail.
 func getCurrentIP() (string, error) {
-	// Try multiple services for reliability
 	for _, service := range IP_SERVICES {
 		resp, err := http.Get(service)
 		if err != nil {
@@ -162,9 +164,7 @@ func getCurrentIP() (string, error) {
 				continue
 			}
 
-			ip := string(body)
-			// Clean up response (remove newlines, etc.)
-			ip = strings.TrimSpace(ip)
+			ip := strings.TrimSpace(string(body))
 			return ip, nil
 		}
 	}
@@ -172,7 +172,8 @@ func getCurrentIP() (string, error) {
 	return "", fmt.Errorf("failed to get IP from all services")
 }
 
-// readLastIP reads the last known IP from file
+// readLastIP retrieves the previously stored IP address from persistent storage.
+// Returns empty string if no previous IP exists or file cannot be read.
 func readLastIP() string {
 	data, err := os.ReadFile(LastIpFile)
 	if err != nil {
@@ -181,28 +182,26 @@ func readLastIP() string {
 	return strings.TrimSpace(string(data))
 }
 
-// saveLastIP saves the current IP to file
+// saveLastIP persists the current IP address to disk for comparison on next run.
 func saveLastIP(ip string) error {
 	return os.WriteFile(LastIpFile, []byte(ip), DataFilePerm)
 }
 
-// saveIPRecord adds a new IP change record
+// saveIPRecord appends a new IP change record to the historical log.
+// Maintains a JSON array of all IP changes with timestamps.
 func saveIPRecord(ip string) error {
 	record := IPRecord{
 		IP:        ip,
 		Timestamp: time.Now(),
 	}
 
-	// Read existing records
 	var records []IPRecord
 	if data, err := os.ReadFile(RecordsFile); err == nil {
 		json.Unmarshal(data, &records)
 	}
 
-	// Add new record
 	records = append(records, record)
 
-	// Save updated records
 	data, err := json.MarshalIndent(records, "", "    ")
 	if err != nil {
 		return err
@@ -211,10 +210,12 @@ func saveIPRecord(ip string) error {
 	return os.WriteFile(RecordsFile, data, DataFilePerm)
 }
 
-// sendWhatsAppMessage sends a WhatsApp message using Meta's Business API
+// sendWhatsAppMessage delivers notifications via WhatsApp Business API.
+// Requires valid API token and phone number configuration. Skips silently
+// if WhatsApp notifications are disabled.
 func sendWhatsAppMessage(config *Config, message string) error {
 	if !config.WhatsAppEnabled {
-		return nil // WhatsApp is disabled
+		return nil
 	}
 
 	url := fmt.Sprintf("https://graph.facebook.com/%s/%s/messages", WhatsappApiVersion, config.WhatsAppPhoneID)
@@ -256,16 +257,16 @@ func sendWhatsAppMessage(config *Config, message string) error {
 	return nil
 }
 
-// sendEmail sends an email notification using SMTP
+// sendEmail delivers notifications via SMTP with STARTTLS encryption.
+// Handles the complete SMTP conversation including TLS negotiation and authentication.
+// Skips silently if email notifications are disabled.
 func sendEmail(config *Config, subject, body string) error {
 	if !config.EmailEnabled {
-		return nil // Email is disabled
+		return nil
 	}
 
-	// Set up authentication information
 	auth := smtp.PlainAuth("", config.EmailFrom, config.EmailPassword, config.SMTPHost)
 
-	// Email headers and body
 	msg := []byte(fmt.Sprintf(
 		"To: %s\r\n"+
 			"Subject: %s\r\n"+
@@ -274,18 +275,15 @@ func sendEmail(config *Config, subject, body string) error {
 			"%s\r\n",
 		config.EmailTo, subject, body))
 
-	// Connect to the server, authenticate, set the sender and recipient,
-	// and send the email all in one step
 	addr := config.SMTPHost + ":" + config.SMTPPort
 
-	// Connect to SMTP server with plain connection first
+	// Establish plain connection then upgrade to TLS
 	conn, err := smtp.Dial(addr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to SMTP server: %v", err)
 	}
 	defer conn.Quit()
 
-	// Start TLS (STARTTLS)
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: false,
 		ServerName:         config.SMTPHost,
@@ -295,22 +293,18 @@ func sendEmail(config *Config, subject, body string) error {
 		return fmt.Errorf("failed to start TLS: %v", err)
 	}
 
-	// Authenticate
 	if err = conn.Auth(auth); err != nil {
 		return fmt.Errorf("SMTP authentication failed: %v", err)
 	}
 
-	// Set sender
 	if err = conn.Mail(config.EmailFrom); err != nil {
 		return fmt.Errorf("failed to set sender: %v", err)
 	}
 
-	// Set recipient
 	if err = conn.Rcpt(config.EmailTo); err != nil {
 		return fmt.Errorf("failed to set recipient: %v", err)
 	}
 
-	// Send the email body
 	w, err := conn.Data()
 	if err != nil {
 		return fmt.Errorf("failed to send email data: %v", err)
@@ -329,7 +323,8 @@ func sendEmail(config *Config, subject, body string) error {
 	return nil
 }
 
-// checkIPAndNotify checks current IP and triggers notification if changed
+// checkIPAndNotify performs the core monitoring logic by comparing current IP
+// against the last known IP and triggering notifications on changes.
 func checkIPAndNotify(config *Config) {
 	currentIP, err := getCurrentIP()
 	if err != nil {
@@ -343,35 +338,31 @@ func checkIPAndNotify(config *Config) {
 
 	if currentIP != lastIP {
 		displayLastIP := lastIP
-
 		if displayLastIP == "" {
 			displayLastIP = "Unknown"
 		}
 
 		log.Printf("IP changed from %s to %s", displayLastIP, currentIP)
-
 		notifyIPChange(config, lastIP, currentIP)
 	} else {
 		log.Println("IP unchanged")
 	}
 }
 
-// notifyIPChange handles the notification process when IP changes
+// notifyIPChange coordinates the notification process when an IP change is detected.
+// Updates persistent storage and dispatches notifications through all enabled channels.
 func notifyIPChange(config *Config, lastIP, currentIP string) {
-	// Save new IP
 	if err := saveLastIP(currentIP); err != nil {
 		log.Printf("Error saving last IP: %v", err)
 	}
 
-	// Save record
 	if err := saveIPRecord(currentIP); err != nil {
 		log.Printf("Error saving IP record: %v", err)
 	}
 
-	// Prepare notification message
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 
-	// Send WhatsApp notification
+	// Dispatch WhatsApp notification
 	if config.WhatsAppEnabled {
 		whatsappMessage := fmt.Sprintf("🚨 IP Address Changed!\n\nOld IP: %s\nNew IP: %s\nTime: %s\n\nRaspberry Pi Monitor",
 			lastIP, currentIP, timestamp)
@@ -383,7 +374,7 @@ func notifyIPChange(config *Config, lastIP, currentIP string) {
 		}
 	}
 
-	// Send Email notification
+	// Dispatch email notification
 	if config.EmailEnabled {
 		emailSubject := "🚨 IP Address Changed - Raspberry Pi Monitor"
 		emailBody := fmt.Sprintf(`IP Address Change Notification
@@ -407,9 +398,8 @@ Raspberry Pi Monitor`, lastIP, currentIP, timestamp)
 	}
 }
 
-// Additional utility functions you might want
-
-// getIPHistory returns the history of IP changes
+// getIPHistory retrieves the complete historical record of IP changes
+// from persistent storage. Returns empty slice if no history exists.
 func getIPHistory() ([]IPRecord, error) {
 	var records []IPRecord
 
@@ -422,7 +412,8 @@ func getIPHistory() ([]IPRecord, error) {
 	return records, err
 }
 
-// printIPHistory prints the IP change history (useful for debugging)
+// printIPHistory outputs the complete IP change history to stdout.
+// Useful for debugging and manual inspection of change patterns.
 func printIPHistory() {
 	records, err := getIPHistory()
 	if err != nil {
