@@ -19,8 +19,9 @@ type Config struct {
 
 // LoggingConfig holds logging configuration
 type LoggingConfig struct {
-	Timezone string `json:"timezone"` // e.g., "America/New_York", "UTC"
-	Format   string `json:"format"`   // e.g., "2006-01-02 15:04:05"
+	Timezone   string `json:"timezone"`   // e.g., "America/New_York", "UTC"
+	Format     string `json:"format"`     // e.g., "2006-01-02 15:04:05"
+	Identifier string `json:"identifier"` // e.g., "public-ip-monitor"
 }
 
 // WhatsAppConfig holds WhatsApp configuration

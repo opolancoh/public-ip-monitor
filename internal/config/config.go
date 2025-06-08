@@ -28,9 +28,9 @@ func NewManager(configPath string) *Manager {
 	}
 }
 
-// Load loads configuration from file
+// Load loads configuration from a file
 func (m *Manager) Load() (*Config, error) {
-	// Check if config file exists
+	// Check if the config file exists
 	if _, err := os.Stat(m.configPath); os.IsNotExist(err) {
 		// Create default config
 		defaultConfig := m.createDefaultConfig()
@@ -98,6 +98,10 @@ func validateConfig(c *Config) error {
 		c.Logging.Format = "2006-01-02 15:04:05"
 	}
 
+	if c.Logging.Identifier == "" {
+		c.Logging.Identifier = "PUBLIC-IP-MONITOR"
+	}
+
 	if c.WhatsApp.APIVersion == "" {
 		c.WhatsApp.APIVersion = "v17.0"
 	}
@@ -146,8 +150,9 @@ func (m *Manager) createDefaultConfig() *Config {
 	return &Config{
 		CheckIntervalSeconds: 300, // 5 minutes
 		Logging: LoggingConfig{
-			Timezone: "UTC",
-			Format:   "2006-01-02 15:04:05",
+			Timezone:   "UTC",
+			Format:     "2006-01-02 15:04:05",
+			Identifier: "PUBLIC-IP-MONITOR",
 		},
 		WhatsApp: WhatsAppConfig{
 			Enabled:         false,

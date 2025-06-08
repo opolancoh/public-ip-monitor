@@ -3,6 +3,7 @@ package logger
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"public-ip-monitor/internal/config"
@@ -10,8 +11,10 @@ import (
 
 // Logger handles logging with timezone support
 type Logger struct {
-	timezone *time.Location
-	format   string
+	timezone   *time.Location
+	format     string
+	identifier string // New field for log identifier
+	logger     *log.Logger
 }
 
 // New creates a new logger with timezone configuration
@@ -22,33 +25,31 @@ func New(cfg config.LoggingConfig) (*Logger, error) {
 	}
 
 	return &Logger{
-		timezone: timezone,
-		format:   cfg.Format,
+		timezone:   timezone,
+		format:     cfg.Format,
+		identifier: cfg.Identifier,
+		logger:     log.New(os.Stdout, "", 0),
 	}, nil
 }
 
-// Info logs an info message with timestamp and timezone
 func (l *Logger) Info(message string) {
 	timestamp := time.Now().In(l.timezone).Format(l.format + " MST")
-	log.Printf("[INFO] %s - %s", timestamp, message)
+	l.logger.Printf("[%s] [INFO] %s - %s", l.identifier, timestamp, message)
 }
 
-// Error logs an error message with timestamp and timezone
 func (l *Logger) Error(message string) {
 	timestamp := time.Now().In(l.timezone).Format(l.format + " MST")
-	log.Printf("[ERROR] %s - %s", timestamp, message)
+	l.logger.Printf("[%s] [ERROR] %s - %s", l.identifier, timestamp, message)
 }
 
-// Warn logs a warning message with timestamp and timezone
 func (l *Logger) Warn(message string) {
 	timestamp := time.Now().In(l.timezone).Format(l.format + " MST")
-	log.Printf("[WARN] %s - %s", timestamp, message)
+	l.logger.Printf("[%s] [WARN] %s - %s", l.identifier, timestamp, message)
 }
 
-// Debug logs a debug message with timestamp and timezone
 func (l *Logger) Debug(message string) {
 	timestamp := time.Now().In(l.timezone).Format(l.format + " MST")
-	log.Printf("[DEBUG] %s - %s", timestamp, message)
+	l.logger.Printf("[%s] [DEBUG] %s - %s", l.identifier, timestamp, message)
 }
 
 // Infof logs a formatted info message
