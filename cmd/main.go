@@ -18,6 +18,9 @@ import (
 	"public-ip-monitor/pkg/whatsapp"
 )
 
+// version is set at build time using -ldflags
+var version string
+
 func main() {
 	// Parse command line flags
 	var (
@@ -42,7 +45,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info("Starting Public IP Monitor...")
+	if version == "" {
+		version = "dev" // Fallback for non-built binaries
+	}
+
+	log.Info("Starting program...")
+	log.Infof("Version: %s", version)
 
 	// Initialize IP storage
 	storage := ip.NewStorage(cfg.IP.DataDir, cfg.IP.RecordsFile, cfg.IP.LastIPFile)

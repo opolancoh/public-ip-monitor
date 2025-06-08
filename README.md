@@ -1,321 +1,376 @@
 # Public IP Monitor
 
-A professional, modular Go application that monitors your public IP address and sends notifications when it changes. Built with clean architecture principles and fully independent, reusable components.
+A Go application that continuously monitors your public IP address and sends instant notifications when changes are detected. Built with clean architecture principles and fully independent, reusable components for maximum reliability and maintainability.
 
 ## Features
 
-🔍 **Continuous IP Monitoring** - Monitors your public IP using multiple services for reliability  
-📧 **Email Notifications** - SMTP email alerts with customizable messages  
-📱 **WhatsApp Notifications** - Meta Business API integration for instant messaging  
-🕐 **Timezone-Aware Logging** - Custom logger with configurable timezone support  
-📊 **IP Change History** - Persistent storage and history tracking  
-⚙️ **Flexible Configuration** - JSON-based configuration with validation  
-🔄 **Graceful Shutdown** - Proper signal handling and cleanup  
-🏗️ **Modular Design** - Independent, reusable packages
+- **Continuous IP Monitoring** - Monitors your public IP using multiple services for enhanced reliability and fault tolerance
+- **Email Notifications** - SMTP email alerts with customizable HTML/text messages and error handling
+- **WhatsApp Notifications** - Meta Business API integration for instant messaging with delivery confirmation
+- **Timezone-Aware Logging** - Custom logger with configurable timezone support and structured output
+- **IP Change History** - Persistent storage and comprehensive history tracking with timestamps
+- **Flexible Configuration** - JSON-based configuration with validation and environment variable support
+- **Graceful Shutdown** - Proper signal handling (SIGTERM/SIGINT) and resource cleanup
+- **Modular Design** - Independent, reusable packages following Go best practices
+- **Error Resilience** - Retry mechanisms and fallback strategies for network failures
+- **Performance Optimized** - Efficient polling with configurable intervals and minimal resource usage
 
-## Quick Start
+## 📋 Prerequisites
 
-### 1. Build the Application
+- **Go 1.19+** - Required for building the application
+- **Network Access** - For querying public IP services
+- **SMTP Credentials** - For email notifications (optional)
+- **Meta Business API Token** - For WhatsApp notifications (optional)
+
+## 🚀 Quick Start
+
+### 1. Clone and Build
 
 ```bash
-make build
+# Clone the repository
+git clone <repository-url>
+cd public-ip-monitor
+
+# Build the application into a standalone executable
+go build -o bin/public-ip-monitor cmd/main.go
+
+# Alternative: Build for specific platform (example for Raspberry Pi)
+GOOS=linux GOARCH=arm GOARM=7 go build -o bin/public-ip-monitor cmd/main.go
 ```
 
-### 2. First Run (Creates Config)
+### 2. Initial Setup
+
+Run the application for the first time to generate the default configuration:
 
 ```bash
-make run
+./bin/public-ip-monitor
 ```
 
-This creates a default `config.json` file. Update it with your credentials.
+This creates a `config.json` file with default settings. The application will exit after creating the config file, prompting you to customize it.
 
 ### 3. Configure Your Settings
 
-Edit `config.json`:
+Edit the generated `config.json` file with your specific settings:
 
 ```json
 {
     "check_interval_seconds": 300,
     "logging": {
-        "timezone": "America/New_York",
-        "format": "2006-01-02 15:04:05"
+        "timezone": "UTC",
+        "format": "2006-01-02 15:04:05",
+        "identifier": "PUBLIC-IP-MONITOR"
     },
     "email": {
         "enabled": true,
         "from": "your-email@gmail.com",
-        "password": "your-app-password",
+        "password": "your-app-password", 
         "to": "recipient@gmail.com",
         "smtp_host": "smtp.gmail.com",
-        "smtp_port": "587"
+        "smtp_port": "587",
+        "timeout": 30
     },
     "whatsapp": {
-        "enabled": true,
-        "token": "YOUR_META_BUSINESS_TOKEN",
-        "phone_id": "YOUR_PHONE_NUMBER_ID",
-        "recipient_number": "1234567890"
+        "enabled": false,
+        "token": "YOUR_WHATSAPP_TOKEN",
+        "phone_id": "YOUR_PHONE_ID",
+        "recipient_number": "YOUR_RECIPIENT_NUMBER",
+        "api_version": "v17.0",
+        "timeout_seconds": 30
+    },
+    "ip": {
+        "services": [
+            "https://api.ipify.org",
+            "https://icanhazip.com", 
+            "https://ipecho.net/plain"
+        ],
+        "timeout_seconds": 30,
+        "data_dir": "data",
+        "records_file": "ip_records.json",
+        "last_ip_file": "last_ip.txt"
     }
 }
 ```
 
-### 4. Start Monitoring
+#### Configuration Options
+
+| Field | Description | Default | Required |
+|-------|-------------|---------|----------|
+| `check_interval_seconds` | How often to check IP (in seconds) | 300 | Yes |
+| `logging.timezone` | Timezone for log timestamps | "UTC" | No |
+| `logging.format` | Go time format for logs | "2006-01-02 15:04:05" | No |
+| `logging.identifier` | Log identifier prefix | "PUBLIC-IP-MONITOR" | No |
+| `email.enabled` | Enable email notifications | true | No |
+| `email.from` | Sender email address | "your-email@gmail.com" | If email enabled |
+| `email.password` | App password (not regular password) | "your-app-password" | If email enabled |
+| `email.to` | Recipient email address | "recipient@gmail.com" | If email enabled |
+| `email.smtp_host` | SMTP server hostname | "smtp.gmail.com" | If email enabled |
+| `email.smtp_port` | SMTP server port | "587" | If email enabled |
+| `email.timeout` | SMTP timeout in seconds | 30 | No |
+| `whatsapp.enabled` | Enable WhatsApp notifications | false | No |
+| `whatsapp.token` | WhatsApp Business API token | "YOUR_WHATSAPP_TOKEN" | If WhatsApp enabled |
+| `whatsapp.phone_id` | Phone number ID from Meta | "YOUR_PHONE_ID" | If WhatsApp enabled |
+| `whatsapp.recipient_number` | Recipient's WhatsApp number | "YOUR_RECIPIENT_NUMBER" | If WhatsApp enabled |
+| `whatsapp.api_version` | WhatsApp API version | "v17.0" | No |
+| `whatsapp.timeout_seconds` | WhatsApp API timeout in seconds | 30 | No |
+| `ip.services` | List of IP detection services | Multiple services | No |
+| `ip.timeout_seconds` | Timeout for IP service requests | 30 | No |
+| `ip.data_dir` | Directory for storing data files | "data" | No |
+| `ip.records_file` | Filename for IP change records | "ip_records.json" | No |
+| `ip.last_ip_file` | Filename for last known IP | "last_ip.txt" | No |
+
+### 4. Setup Email Notifications (Optional)
+
+For Gmail users:
+1. Enable 2-factor authentication on your Google account
+2. Generate an App Password: Google Account Settings → Security → 2-Step Verification → App Passwords
+3. Use the generated app password in the `email.password` field
+
+For other email providers, update the SMTP settings accordingly.
+
+### 5. Setup WhatsApp Notifications (Optional)
+
+1. Create a Meta Business account
+2. Set up WhatsApp Business API
+3. Obtain your access token and phone number ID
+4. Add the recipient's phone number (include country code, no + sign)
+
+### 6. Start Monitoring
+
+Run the application to begin continuous monitoring:
 
 ```bash
-make run
+./bin/public-ip-monitor
 ```
 
-## Architecture
+The application will:
+- Check your current public IP address
+- Store it for comparison
+- Monitor for changes at the configured interval
+- Send notifications when changes are detected
+- Log all activities with timestamps
 
-Clean, professional structure with single responsibility principles:
+## 🏗️ Architecture
+
+The application follows clean architecture principles with clear separation of concerns:
 
 ```
 public-ip-monitor/
-├── cmd/                    # Application entry point
-├── internal/               # Private application code
-│   ├── config/            # Configuration management
-│   ├── ip/                # IP monitoring logic
-│   └── logger/            # Custom logging
-└── pkg/                   # Reusable packages
+├── cmd/                    # Application entry point and CLI handling
+│   └── main.go            # Main application logic and argument parsing
+├── internal/               # Private application code (not importable)
+│   ├── config/            # Configuration management and validation
+│   │   ├── config.go      # Configuration struct and loading logic
+│   │   └── validation.go  # Configuration validation rules
+│   ├── ip/                # IP monitoring core logic
+│   │   ├── monitor.go     # Main monitoring loop and state management
+│   │   ├── fetcher.go     # Public IP fetching from multiple sources
+│   │   └── history.go     # IP change history persistence
+│   └── logger/            # Custom logging with timezone support
+│       ├── logger.go      # Logger implementation
+│       └── formatter.go   # Custom log formatting
+└── pkg/                   # Reusable packages (importable by other projects)
     ├── email/             # Email client (fully independent)
+    │   ├── client.go      # SMTP email client implementation
+    │   └── templates.go   # Email template management
     └── whatsapp/          # WhatsApp client (fully independent)
+        ├── client.go      # Meta Business API client
+        └── messages.go    # Message formatting and sending
 ```
 
-## Usage
+## 📖 Usage
 
-### Basic Commands
+### Local Development
 
 ```bash
-# Monitor continuously
+# Run directly with Go
+go run cmd/main.go
+```
+
+### Command Line Options
+
+```bash
+# Standard continuous monitoring
 ./bin/public-ip-monitor
 
-# Check IP once and exit
+# Check IP address once and exit (useful for testing)
 ./bin/public-ip-monitor -check
 
-# Show IP change history
+# Display IP change history
 ./bin/public-ip-monitor -history
 
-# Use custom config file
-./bin/public-ip-monitor -config=/path/to/config.json
+# Use custom configuration file
+./bin/public-ip-monitor -config=/path/to/your/config.json
+
+# Display help information
+./bin/public-ip-monitor -help
+
+# Display version information
+./bin/public-ip-monitor -version
 ```
 
-### Make Commands
+### Example Output
+
+```
+[PUBLIC-IP-MONITOR] 2025-06-08 15:30:00 [INFO] Public IP Monitor starting...
+[PUBLIC-IP-MONITOR] 2025-06-08 15:30:00 [INFO] Current IP: 203.0.113.45
+[PUBLIC-IP-MONITOR] 2025-06-08 15:30:00 [INFO] Monitoring every 300 seconds...
+[PUBLIC-IP-MONITOR] 2025-06-08 15:35:15 [INFO] IP changed: 203.0.113.45 → 198.51.100.123
+[PUBLIC-IP-MONITOR] 2025-06-08 15:35:15 [INFO] Email notification sent successfully
+[PUBLIC-IP-MONITOR] 2025-06-08 15:35:16 [INFO] WhatsApp notification sent successfully
+```
+
+## 🚀 Deployment
+
+# Build and run
 
 ```bash
-make build          # Build the application
-make run            # Build and run
-make check          # Check IP once
-make history        # Show IP history
-make test           # Run tests
-make clean          # Clean build artifacts
-make install        # Install dependencies
+go build -ldflags "-X main.version=1.0.0" -o bin/public-ip-monitor cmd/main.go
+./bin/public-ip-monitor
 ```
 
-## Configuration Guide
+### Cross-Platform Compilation
 
-### Email Setup (Gmail)
+```bash
+# Linux (x64)
+GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=1.0.0" -o bin/public-ip-monitor-linux-amd64 cmd/main.go
 
-1. Enable 2FA on your Google account
-2. Generate an App Password:
-   - Google Account → Security → 2-Step Verification → App passwords
-3. Use the App Password (not your regular password) in config
+# Linux (ARM - Raspberry Pi)
+GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "-X main.version=1.0.0" -o bin/public-ip-monitor-linux-arm7 cmd/main.go
 
-### WhatsApp Setup
+# Windows (x64)
+GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=1.0.0" -o bin/public-ip-monitor-windows-amd64.exe cmd/main.go
 
-1. Create a [Meta Business Account](https://business.facebook.com/)
-2. Set up WhatsApp Business API
-3. Get your Phone Number ID and Access Token
-4. Add recipient numbers to your business account
+# macOS (x64)
+GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=1.0.0" -o bin/public-ip-monitor-darwin-amd64 cmd/main.go
 
-### Configuration Options
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `check_interval_seconds` | How often to check IP (seconds) | 300 |
-| `logging.timezone` | Timezone for log timestamps | UTC |
-| `logging.format` | Time format for logs | 2006-01-02 15:04:05 |
-| `email.enabled` | Enable email notifications | true |
-| `email.smtp_host` | SMTP server hostname | smtp.gmail.com |
-| `email.smtp_port` | SMTP server port | 587 |
-| `whatsapp.enabled` | Enable WhatsApp notifications | false |
-| `whatsapp.api_version` | Meta API version | v17.0 |
-| `ip.services` | List of IP detection services | 3 reliable services |
-| `ip.timeout_seconds` | Service request timeout | 30 |
-
-## Reusable Packages
-
-Both email and WhatsApp packages are completely independent and can be used in other Go projects:
-
-### Email Package
-
-```go
-import "public-ip-monitor/pkg/email"
-
-factory := email.NewSMTPFactory()
-client, err := factory.NewClient(email.Config{
-    From:     "sender@example.com",
-    Password: "app-password",
-    SMTPHost: "smtp.gmail.com",
-    SMTPPort: "587",
-    Timeout:  30,
-})
-
-err = client.Send(ctx, email.Message{
-    To:      "recipient@example.com",
-    Subject: "Test Subject",
-    Body:    "Test Body",
-})
+# macOS (Apple Silicon)
+GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=1.0.0" -o bin/public-ip-monitor-darwin-arm64 cmd/main.go
 ```
 
-### WhatsApp Package
+### Server Deployment
 
-```go
-import "public-ip-monitor/pkg/whatsapp"
+#### 1. Prepare the Server
 
-factory := whatsapp.NewMetaFactory()
-client, err := factory.NewClient(whatsapp.Config{
-    Token:   "your-meta-token",
-    PhoneID: "your-phone-id",
-    APIVersion: "v17.0",
-    TimeoutSeconds: 30,
-})
-
-err = client.Send(ctx, whatsapp.Message{
-    To:   "1234567890",
-    Text: "Hello from Go!",
-})
+```bash
+# Create application directory with proper permissions
+sudo mkdir -p /opt/public-ip-monitor
+sudo chown -R ${USER}:${USER} /opt/public-ip-monitor
+sudo chmod -R 755 /opt/public-ip-monitor
 ```
 
-## Deployment
+#### 2. Deploy the Application
+
+```bash
+# From your development machine, copy the binary to the server
+scp ./bin/public-ip-monitor user@your-server:/opt/public-ip-monitor/
+
+# Copy configuration file (if customized)
+scp ./config.json user@your-server:/opt/public-ip-monitor/
+
+# SSH into the server and make the binary executable
+ssh user@your-server
+chmod +x /opt/public-ip-monitor/public-ip-monitor
+```
+
+#### 3. Test the Deployment
+
+```bash
+# Test the application manually
+cd /opt/public-ip-monitor
+./public-ip-monitor -check
+```
 
 ### Systemd Service (Linux)
+
+Create a systemd service for automatic startup and management:
+
+#### 1. Create Service File
 
 Create `/etc/systemd/system/public-ip-monitor.service`:
 
 ```ini
 [Unit]
-Description=Public IP Monitor
-After=network.target
+Description=Public IP Monitor - Monitors public IP address changes
+Documentation=https://github.com/your-repo/public-ip-monitor
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=your-user
+Group=your-group
 WorkingDirectory=/opt/public-ip-monitor
-ExecStart=/opt/public-ip-monitor/bin/public-ip-monitor
+ExecStart=/opt/public-ip-monitor/public-ip-monitor
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
 Restart=always
 RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/public-ip-monitor
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=public-ip-monitor
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Enable and start:
+#### 2. Enable and Start Service
 
 ```bash
+# Reload systemd to recognize the new service
+sudo systemctl daemon-reload
+
+# Enable the service to start automatically at boot
 sudo systemctl enable public-ip-monitor
+
+# Start the service immediately
 sudo systemctl start public-ip-monitor
+
+# Verify the service is running
 sudo systemctl status public-ip-monitor
 ```
 
-### Docker
-
-```dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY . .
-RUN go mod download
-RUN go build -o bin/public-ip-monitor cmd/main.go
-
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates tzdata
-WORKDIR /root/
-COPY --from=builder /app/bin/public-ip-monitor .
-COPY --from=builder /app/configs/config.example.json config.json
-CMD ["./public-ip-monitor"]
-```
-
-### Cross-Platform Builds
+#### 3. Service Management Commands
 
 ```bash
-make build-linux     # Linux AMD64
-make build-windows   # Windows AMD64
-make build-macos     # macOS AMD64
-make build-all       # All platforms
+# View service status
+sudo systemctl status public-ip-monitor
+
+# View recent logs
+sudo journalctl -u public-ip-monitor -f
+
+# View logs from the last hour
+sudo journalctl -u public-ip-monitor --since "1 hour ago"
+
+# Restart the service
+sudo systemctl restart public-ip-monitor
+
+# Stop the service
+sudo systemctl stop public-ip-monitor
+
+# Disable auto-start
+sudo systemctl disable public-ip-monitor
+
+# Remove the service (after stopping and disabling)
+sudo rm /etc/systemd/system/public-ip-monitor.service
+sudo systemctl daemon-reload
 ```
 
-## Development
+📝 Changelog
+Version 1.0.0
 
-### Project Structure Benefits
-
-✅ **Modularity** - Each feature is completely independent  
-✅ **Reusability** - Email and WhatsApp packages work standalone  
-✅ **Testability** - Interface-based design enables easy testing  
-✅ **Maintainability** - Single responsibility principle throughout  
-✅ **Extensibility** - Easy to add new notification channels or IP services
-
-### Adding New Features
-
-Want to add Slack notifications? Just create `pkg/slack/` following the same pattern:
-
-```go
-// pkg/slack/types.go
-type Client interface {
-    Send(ctx context.Context, message Message) error
-    Close() error
-}
-
-// pkg/slack/client.go
-type SlackClient struct { /* implementation */ }
-```
-
-Then use it independently in main.go just like email and WhatsApp.
-
-## Troubleshooting
-
-### Common Issues
-
-**"Config file not found"**
-- Run the application once to generate default config
-- Ensure you're in the correct directory
-
-**"Email authentication failed"**
-- Use App Password for Gmail (not regular password)
-- Ensure 2FA is enabled on Google account
-- Check SMTP settings
-
-**"WhatsApp API errors"**
-- Verify Meta Business account setup
-- Check token permissions and expiration
-- Ensure recipient number is registered with business account
-
-**"Network timeouts"**
-- Check internet connectivity
-- Verify firewall settings
-- Increase timeout values in config
-
-### Debug Mode
-
-Enable detailed logging by modifying the logger configuration or add debug statements as needed.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes following the existing architecture
-4. Add tests for new functionality
-5. Submit a pull request
-
-## License
-
-This project is open source. Feel free to use, modify, and distribute.
-
-## Architecture Philosophy
-
-This project demonstrates professional Go development practices:
-
-- **Clean Architecture** - Clear separation between business logic and infrastructure
-- **Interface-Based Design** - Easy testing and swapping of implementations
-- **Configuration-Driven** - Behavior controlled through configuration, not code
-- **Error Handling** - Comprehensive error handling with proper context
-- **Graceful Degradation** - Continues operating even if some features fail
-- **Production Ready** - Logging, monitoring, and deployment considerations
-
-The codebase serves as an excellent example of how to structure Go applications that are maintainable, testable, and scalable.
+Initial release with core IP monitoring functionality
+Email and WhatsApp notification support
+Systemd service integration
+Cross-platform compilation support
